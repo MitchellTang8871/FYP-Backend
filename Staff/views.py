@@ -10,6 +10,11 @@ from django.contrib.auth import get_user_model
 
 # Create your views here.
 @csrf_exempt
+def auth_logout(request):
+    logout(request)
+    return HttpResponse(status=200)
+
+@csrf_exempt
 def login(request):
     username = request.POST['username']
     password = request.POST['password']
