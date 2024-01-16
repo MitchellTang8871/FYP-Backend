@@ -34,6 +34,15 @@ def login(request):
     return HttpResponse(status=401)
 
 @csrf_exempt
+def checkToken(request):
+    token = request.POST['token']
+    try:
+        token_obj = Token.objects.get(key=token)
+        return HttpResponse(status=200)
+    except Exception as e:
+        return HttpResponse(status=401)
+
+@csrf_exempt
 def register(request):
     if request.method == 'POST':
         username = request.POST.get('username')
