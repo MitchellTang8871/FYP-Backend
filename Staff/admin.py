@@ -18,7 +18,18 @@ class UserAdmin(admin.ModelAdmin):
         "name",
         "email",
         "date_joined",
-        "dob",
     ]
 
+class LogAdmin(admin.ModelAdmin):
+    list_display = ('user', 'action', 'timestamp')
+    search_fields = ('user__username', 'action')
+    list_filter = ('timestamp',)
+
+class UsualLoginLocationAdmin(admin.ModelAdmin):
+    list_display = ('user', 'userIp', 'city', 'country', 'details', 'timestamp')
+    search_fields = ('user__username', 'city', 'country')
+    list_filter = ('timestamp',)
+
 admin.site.register(User, UserAdmin)
+admin.site.register(Log, LogAdmin)
+admin.site.register(UsualLoginLocation, UsualLoginLocationAdmin)
