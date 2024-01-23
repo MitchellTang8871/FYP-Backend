@@ -21,18 +21,19 @@ def auth_logout(request):
     return HttpResponse(status=200)
 
 @csrf_exempt
-def login(request):
+def login2(request):
     # print(request.META)
     ipInfo = get_ip_location(request)
     return HttpResponse(status=401)
 
 @csrf_exempt
-def login2(request):
+def login(request):
     username = request.POST['username']
     password = request.POST['password']
     faceImage = request.FILES.get('image')
     user = authenticate(username=username, password=password)
-
+    print(username)
+    print(password)
     if user:
         if faceImage:
             image = face_recognition.load_image_file(faceImage)
@@ -55,8 +56,9 @@ def login2(request):
                     #create and save token
                     newToken=Token(user=user)
                     newToken.save()
-                    ipInfo = get_ip_location(request)
-                    Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
+                    # ipInfo = get_ip_location(request)
+                    # Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
+                    Log.objects.create(user=user, action="Login Successful")
                     return JsonResponse({
                         "token":newToken.key
                     })
@@ -73,7 +75,7 @@ def login2(request):
                     {"message": "Invalid number of faces detected. Please capture an image with exactly one face."},
                     status=408
                 )
-    return HttpResponse(status=401)
+    return JsonResponse({"message": "Invalid credentials"}, status=401)
 
 @csrf_exempt
 def checkToken(request):

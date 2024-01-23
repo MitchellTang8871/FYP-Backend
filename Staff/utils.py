@@ -24,8 +24,8 @@ def is_eye_open(face_image, center, radius):
     lower_white = np.array([0, 0, 100])
     upper_white = np.array([179, 30, 255])
     mask = cv2.inRange(hsv, lower_white, upper_white)
-    print("White pixels:", cv2.countNonZero(mask))
-    print("HSV Values:", hsv)
+    # print("White pixels:", cv2.countNonZero(mask))
+    # print("HSV Values:", hsv)
     if cv2.countNonZero(mask) > 0:
         return True
     return False
@@ -34,10 +34,8 @@ def get_client_ip(request):
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if x_forwarded_for:
         ip = x_forwarded_for.split(',')[0]
-        print(ip)
     else:
         ip = request.META.get('REMOTE_ADDR')
-        print("remote_addr: ", ip)
     return ip
 
 def get_ip_location(request):
