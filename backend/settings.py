@@ -59,6 +59,16 @@ CORS_ALLOWED_ORIGINS = [
     "https://.ngrok-free.app",
 ]
 
+#Email settings
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'greedymist@gmail.com'
+EMAIL_HOST_PASSWORD = 'edzs khbk vaxo axwh'
+
+USE_TZ = True
+
 ROOT_URLCONF = 'backend.urls'
 
 TEMPLATES = [

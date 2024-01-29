@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 import json
+from django.utils import timezone
 
 
 # Create your models here.
@@ -48,8 +49,8 @@ class Log(models.Model):
 class UsualLoginLocation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     userIp = models.CharField(max_length=255)
-    city = models.CharField(max_length=255)
-    country = models.CharField(max_length=255)
+    city = models.CharField(max_length=255, null=True, blank=True)
+    country = models.CharField(max_length=255, null=True, blank=True)
     details = models.TextField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
 
@@ -66,3 +67,9 @@ class UsualLoginLocation(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.city}, {self.country}"
+
+class Otp(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    otp = models.CharField(max_length=6)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    validUntil = models.DateTimeField(default=timezone.now() + timezone.timedelta(minutes=5))

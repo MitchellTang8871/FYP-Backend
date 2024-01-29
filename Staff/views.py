@@ -9,8 +9,8 @@ from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 import face_recognition
 import numpy as np
-from .utils import detect_eyes, get_ip_location
-from .models import Log
+from .utils import detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location
+from .models import Log, UsualLoginLocation
 
 # Create your views here.
 @csrf_exempt
@@ -24,6 +24,8 @@ def auth_logout(request):
 def login2(request):
     # print(request.META)
     ipInfo = get_ip_location(request)
+    if ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1":
+        print("localhost")
     return HttpResponse(status=401)
 
 @csrf_exempt
@@ -31,9 +33,8 @@ def login(request):
     username = request.POST['username']
     password = request.POST['password']
     faceImage = request.FILES.get('image')
+    otp = request.POST.get('otp')
     user = authenticate(username=username, password=password)
-    print(username)
-    print(password)
     if user:
         if faceImage:
             image = face_recognition.load_image_file(faceImage)
@@ -44,24 +45,47 @@ def login(request):
                 user_face_encodings = user.deserialize_face_encodings()
                 user_face_encodings = np.array(user_face_encodings)
                 if not detect_eyes(image):
-                    Log.objects.create(user=user, action="Login Failed - Eyes are not open.")
-                    return JsonResponse({"message": "Eyes are not open"}, status=405)
+                    print("Eyes are not open")
+                    # Log.objects.create(user=user, action="Login Failed - Eyes are not open.")
+                    return JsonResponse({"message": "Eyes are not open, might be lighting issue"}, status=405)
                 #check if user face correctly matches
                 results = face_recognition.compare_faces([user_face_encodings],face_encodings[0],tolerance=0.6)
-                if results[0]:
-                    #delete any previous token
-                    prevToken=Token.objects.filter(user=user)
-                    if len(prevToken)>0:
-                        prevToken.delete()
-                    #create and save token
-                    newToken=Token(user=user)
-                    newToken.save()
-                    # ipInfo = get_ip_location(request)
-                    # Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
-                    Log.objects.create(user=user, action="Login Successful")
-                    return JsonResponse({
-                        "token":newToken.key
-                    })
+                if results[0]: #if user face matches
+                    ipInfo = get_ip_location(request)
+                    usual_login_locations = UsualLoginLocation.objects.filter(user=user)
+                    #check for login location
+                    # if ipInfo.get("status") == "success" and ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #login from usual location
+                    if ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True):
+                        token = create_token(request, user)
+                        Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
+                        return JsonResponse({"token":token}, status=200)
+                    # elif ipInfo.get("status") == "success":
+                    elif ipInfo.get("status") == "success" or ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1":
+                        if otp is None or len(str(otp).strip()) == 0:
+                            print("send email otp")
+                            if generate_and_send_otp(user, "Login"):
+                                Log.objects.create(user=user, action="OTP Sent, New Login Location Detected", description=f"User IP Info: {ipInfo}")
+                                return JsonResponse({"message": "New Login Location Detected, please get OTP from email"}, status=406)
+                            else:
+                                return JsonResponse({"message": "Unexpected error while sending OTP"}, status=406)
+                        else:
+                            print("verify otp")
+                            if verify_otp(otp, user):
+                                create_usual_login_location(user, ipInfo)
+                                token = create_token(request, user)
+                                Log.objects.create(user=user, action="OTP Verified, New Login Location Recorded", description=f"User IP Info: {ipInfo}")
+                                Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
+                                return JsonResponse({"token":token}, status=200)
+                            else:
+                                Log.objects.create(user=user, action="OTP Verification Failed, New Login Location Detected", description=f"User IP Info: {ipInfo}")
+                                return JsonResponse({"message": "OTP Verification Failed, invalid OTP"}, status=406)
+                    # elif ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1": #development environment purpose
+                    #     print("localhost")
+                    #     token = create_token(request, user)
+                    #     Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
+                    #     return JsonResponse({"token":token}, status=200)
+                    else:
+                        return JsonResponse({"message": "Unexpected ip address detection error"}, status=500)
                 else:
                     Log.objects.create(user=user, action="Login Failed - Face does not match.")
                     return JsonResponse(
@@ -160,3 +184,20 @@ def register2(request):
             return JsonResponse({"message": "Unexpected error"}, status=500)
 
     return HttpResponse(status=401)
+
+@csrf_exempt
+def resendOtp(request):
+    action = request.POST.get('action')
+    if action is None:
+        action = "Resend OTP"
+    if request.user.is_authenticated:
+        generate_and_send_otp(request.user, action)
+    else:
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        user = authenticate(username=username, password=password)
+        if user:
+            generate_and_send_otp(user, action)
+        else:
+            return HttpResponse(status=401)
+    return HttpResponse(status=200)

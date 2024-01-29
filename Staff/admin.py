@@ -30,6 +30,12 @@ class UsualLoginLocationAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'city', 'country')
     list_filter = ('timestamp',)
 
+class OtpAdmin(admin.ModelAdmin):
+    list_display = ('user', 'otp', 'timestamp', 'validUntil')
+    search_fields = ('user__username', 'otp')
+    list_filter = ('timestamp',)
+
 admin.site.register(User, UserAdmin)
 admin.site.register(Log, LogAdmin)
 admin.site.register(UsualLoginLocation, UsualLoginLocationAdmin)
+admin.site.register(Otp, OtpAdmin)
