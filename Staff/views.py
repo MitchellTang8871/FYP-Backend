@@ -1,24 +1,50 @@
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth import logout
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, logout, login
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.core.exceptions import ObjectDoesNotExist
+from . import serializers
 from django.contrib.auth import get_user_model
 import face_recognition
 import numpy as np
 from .utils import detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location
 from .models import Log, UsualLoginLocation
 
+def getRequester(request):
+    http_auth_token = request.META.get('HTTP_AUTHORIZATION')
+    if http_auth_token != "undefined" and http_auth_token is not None:
+        theToken = http_auth_token.split(" ")[1]
+        try:
+            token = Token.objects.get(key=theToken)
+            user = token.user
+        except ObjectDoesNotExist:
+            # invalid token
+            return HttpResponse(status=460)
+    return user
 # Create your views here.
 @csrf_exempt
 def auth_logout(request):
-    Token.objects.get(user=request.user).delete()
-    Log.objects.create(user=request.user, action="Logout")
-    logout(request)
-    return HttpResponse(status=200)
+    http_auth_token = request.META.get('HTTP_AUTHORIZATION')
+
+    if http_auth_token and http_auth_token != "undefined":
+        theToken = http_auth_token.split(" ")[1]
+
+        try:
+            token = Token.objects.get(key=theToken)
+            theUser = token.user
+        except ObjectDoesNotExist:
+            # Invalid token
+            return HttpResponse(status=460)
+
+        # Token retrieval successful, delete token and create log
+        token.delete()
+        Log.objects.create(user=theUser, action="Logout")
+        return HttpResponse(status=200)
+    else:
+        return HttpResponse(status=460)  # Bad request, token not provided
 
 @csrf_exempt
 def login2(request):
@@ -29,7 +55,7 @@ def login2(request):
     return HttpResponse(status=401)
 
 @csrf_exempt
-def login(request):
+def auth_login(request):
     username = request.POST['username']
     password = request.POST['password']
     faceImage = request.FILES.get('image')
@@ -55,12 +81,14 @@ def login(request):
                     usual_login_locations = UsualLoginLocation.objects.filter(user=user)
                     #check for login location
                     # if ipInfo.get("status") == "success" and ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #login from usual location
-                    if ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True):
+                    if ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #development environment purpose
                         token = create_token(request, user)
+                        login(request, user)
+                        print("LOGIN")
                         Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
                         return JsonResponse({"token":token}, status=200)
                     # elif ipInfo.get("status") == "success":
-                    elif ipInfo.get("status") == "success" or ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1":
+                    elif ipInfo.get("status") == "success" or ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1": #development environment purpose
                         if otp is None or len(str(otp).strip()) == 0:
                             print("send email otp")
                             if generate_and_send_otp(user, "Login"):
@@ -73,15 +101,17 @@ def login(request):
                             if verify_otp(otp, user):
                                 create_usual_login_location(user, ipInfo)
                                 token = create_token(request, user)
+                                login(request, user)
                                 Log.objects.create(user=user, action="OTP Verified, New Login Location Recorded", description=f"User IP Info: {ipInfo}")
                                 Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
                                 return JsonResponse({"token":token}, status=200)
                             else:
                                 Log.objects.create(user=user, action="OTP Verification Failed, New Login Location Detected", description=f"User IP Info: {ipInfo}")
                                 return JsonResponse({"message": "OTP Verification Failed, invalid OTP"}, status=406)
-                    # elif ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1": #development environment purpose
+                    # elif ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1": #development environment purpose for skipping otp
                     #     print("localhost")
                     #     token = create_token(request, user)
+                        # login(request, user)
                     #     Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
                     #     return JsonResponse({"token":token}, status=200)
                     else:
@@ -108,7 +138,7 @@ def checkToken(request):
         token_obj = Token.objects.get(key=token)
         return HttpResponse(status=200)
     except Exception as e:
-        return HttpResponse(status=401)
+        return HttpResponse(status=460)
 
 @csrf_exempt
 def register(request):
@@ -201,3 +231,10 @@ def resendOtp(request):
         else:
             return HttpResponse(status=401)
     return HttpResponse(status=200)
+
+@csrf_exempt
+def getActivityLogs(request):
+    theUser = getRequester(request)
+    logs = Log.objects.filter(user=theUser).order_by('-timestamp')
+    serialized_logs = serializers.ActivityLogsSerializer(logs, many=True).data
+    return JsonResponse(serialized_logs, safe=False)

@@ -56,7 +56,7 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "https://.ngrok-free.app",
+    "https://.ngrok-free.app", #For ngrok to work so running server locally also could get ip address
 ]
 
 #Email settings
