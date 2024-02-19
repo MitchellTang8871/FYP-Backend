@@ -114,7 +114,7 @@ def login(request):
                     fs = FileSystemStorage()
                     filename = fs.save(filename, faceImage)
                     uploaded_file_path = fs.path(filename)
-                    Log.objects.create(user=user, action="Login Failed - Face does not match.", description=log_description)
+                    Log.objects.create(user=user, action="Login Failed - Face does not match.", description=uploaded_file_path)
                     return JsonResponse(
                     {"message": "Face does not match."},
                     status=409
