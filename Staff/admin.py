@@ -17,11 +17,12 @@ class UserAdmin(admin.ModelAdmin):
         "username",
         "name",
         "email",
+        "emailVerified",
         "date_joined",
     ]
 
 class LogAdmin(admin.ModelAdmin):
-    list_display = ('user', 'action', 'timestamp')
+    list_display = ('user', 'action', "description", 'timestamp')
     search_fields = ('user__username', 'action')
     list_filter = ('timestamp',)
 

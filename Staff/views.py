@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth import authenticate, logout, login
+from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -12,6 +12,10 @@ import face_recognition
 import numpy as np
 from .utils import detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location
 from .models import Log, UsualLoginLocation
+from django.conf import settings
+import os
+from datetime import datetime
+from django.core.files.storage import FileSystemStorage
 
 def getRequester(request):
     http_auth_token = request.META.get('HTTP_AUTHORIZATION')
@@ -26,7 +30,7 @@ def getRequester(request):
     return user
 # Create your views here.
 @csrf_exempt
-def auth_logout(request):
+def logout(request):
     http_auth_token = request.META.get('HTTP_AUTHORIZATION')
 
     if http_auth_token and http_auth_token != "undefined":
@@ -47,15 +51,7 @@ def auth_logout(request):
         return HttpResponse(status=460)  # Bad request, token not provided
 
 @csrf_exempt
-def login2(request):
-    # print(request.META)
-    ipInfo = get_ip_location(request)
-    if ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1":
-        print("localhost")
-    return HttpResponse(status=401)
-
-@csrf_exempt
-def auth_login(request):
+def login(request):
     username = request.POST['username']
     password = request.POST['password']
     faceImage = request.FILES.get('image')
@@ -71,7 +67,6 @@ def auth_login(request):
                 user_face_encodings = user.deserialize_face_encodings()
                 user_face_encodings = np.array(user_face_encodings)
                 if not detect_eyes(image):
-                    print("Eyes are not open")
                     # Log.objects.create(user=user, action="Login Failed - Eyes are not open.")
                     return JsonResponse({"message": "Eyes are not open, might be lighting issue"}, status=405)
                 #check if user face correctly matches
@@ -83,14 +78,11 @@ def auth_login(request):
                     # if ipInfo.get("status") == "success" and ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #login from usual location
                     if ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #development environment purpose
                         token = create_token(request, user)
-                        login(request, user)
-                        print("LOGIN")
                         Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
                         return JsonResponse({"token":token}, status=200)
                     # elif ipInfo.get("status") == "success":
                     elif ipInfo.get("status") == "success" or ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1": #development environment purpose
                         if otp is None or len(str(otp).strip()) == 0:
-                            print("send email otp")
                             if generate_and_send_otp(user, "Login"):
                                 Log.objects.create(user=user, action="OTP Sent, New Login Location Detected", description=f"User IP Info: {ipInfo}")
                                 return JsonResponse({"message": "New Login Location Detected, please get OTP from email"}, status=406)
@@ -101,7 +93,6 @@ def auth_login(request):
                             if verify_otp(otp, user):
                                 create_usual_login_location(user, ipInfo)
                                 token = create_token(request, user)
-                                login(request, user)
                                 Log.objects.create(user=user, action="OTP Verified, New Login Location Recorded", description=f"User IP Info: {ipInfo}")
                                 Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
                                 return JsonResponse({"token":token}, status=200)
@@ -111,13 +102,19 @@ def auth_login(request):
                     # elif ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1": #development environment purpose for skipping otp
                     #     print("localhost")
                     #     token = create_token(request, user)
-                        # login(request, user)
                     #     Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
                     #     return JsonResponse({"token":token}, status=200)
                     else:
                         return JsonResponse({"message": "Unexpected ip address detection error"}, status=500)
                 else:
-                    Log.objects.create(user=user, action="Login Failed - Face does not match.")
+                    # Generate a unique filename using username and current datetime
+                    currentDatetime = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+                    filename = f"{username}-{currentDatetime}.jpg"
+                    # Save the image
+                    fs = FileSystemStorage()
+                    filename = fs.save(filename, faceImage)
+                    uploaded_file_path = fs.path(filename)
+                    Log.objects.create(user=user, action="Login Failed - Face does not match.", description=log_description)
                     return JsonResponse(
                     {"message": "Face does not match."},
                     status=409
@@ -177,7 +174,7 @@ def register(request):
                     )
                     #Log
                     Log.objects.create(user=user, action="User account created")
-                    return JsonResponse({"message": "Registration successful"}, status=200)
+                    return JsonResponse({"message": "Registration successful, Please login to activate your account"}, status=200)
                 else:
                     # Reject the image if more or fewer than one face is detected
                     return JsonResponse(
@@ -188,6 +185,8 @@ def register(request):
                 return JsonResponse({"message": "No image provided"}, status=408)
 
         except Exception as e:
+            error_message = str(e)  # Convert the exception to a string
+            print(error_message)
             return JsonResponse({"message": "Unexpected error"}, status=500)
 
     return HttpResponse(status=401)

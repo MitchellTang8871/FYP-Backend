@@ -13,6 +13,7 @@ class User(AbstractUser):
     username = models.CharField(max_length=24, unique=True)
     name = models.CharField(default="Anonymous", max_length=120)
     email = models.CharField(default=None, max_length=100, null=True, blank=True)
+    emailVerified = models.BooleanField(default=False)
     face_encodings = models.TextField(null=True, blank=True)
 
     def save(self, *args, **kwargs):

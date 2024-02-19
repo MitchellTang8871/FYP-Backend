@@ -11,9 +11,12 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
 # Quick-start development settings - unsuitable for production
@@ -25,7 +28,7 @@ SECRET_KEY = 'django-insecure-$m@37mp)e+j)w=asxz=$!8y$lw@)s=r(a89rw9(3+9!tgg+%0q
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost','.ngrok-free.app']
+ALLOWED_HOSTS = ['localhost','.ngrok-free.app','.loclx.io']
 
 
 # Application definition
@@ -56,7 +59,12 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
-    "https://.ngrok-free.app", #For ngrok to work so running server locally also could get ip address
+    "https://.ngrok-free.app", #For ngrok to work so running server locally also could get ip address ...........got banned
+    "https://.loclx.io", #loclx in replace for ngrok
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.loclx.io',
 ]
 
 #Email settings
