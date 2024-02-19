@@ -104,7 +104,6 @@ def generate_and_send_otp(user, action):
         return False
 
 def verify_otp(otp, user):
-    print("verifiing otp: ",otp)
     try:
         otpObj = Otp.objects.get(user=user, otp=otp, validUntil__gte=timezone.now())
         otpObj.delete()

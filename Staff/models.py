@@ -12,7 +12,7 @@ class User(AbstractUser):
 
     username = models.CharField(max_length=24, unique=True)
     name = models.CharField(default="Anonymous", max_length=120)
-    email = models.CharField(default=None, max_length=100, null=True, blank=True)
+    email = models.EmailField(default=None, max_length=100, null=True, blank=True)
     emailVerified = models.BooleanField(default=False)
     face_encodings = models.TextField(null=True, blank=True)
 
@@ -27,7 +27,7 @@ class User(AbstractUser):
             self.email = None
 
         # Serialize face_encodings to JSON before saving
-        if self.face_encodings:
+        if isinstance(self.face_encodings, list):
             self.face_encodings = json.dumps(self.face_encodings)
 
         super(User, self).save(*args, **kwargs)

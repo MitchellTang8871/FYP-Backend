@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model
 import face_recognition
 import numpy as np
 from .utils import detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location
-from .models import Log, UsualLoginLocation
+from .models import Log, UsualLoginLocation, User
 from django.conf import settings
 import os
 from datetime import datetime
@@ -73,8 +73,31 @@ def login(request):
                 results = face_recognition.compare_faces([user_face_encodings],face_encodings[0],tolerance=0.6)
                 if results[0]: #if user face matches
                     ipInfo = get_ip_location(request)
+
+                    #check account activation
+                    if not user.emailVerified:
+                        if otp is None or len(str(otp).strip()) == 0:
+                            if generate_and_send_otp(user, "Account Activation"):
+                                Log.objects.create(user=user, action="OTP Sent, Email validating", description=user.email)
+                                return JsonResponse({"message": "Account Inactive, Please get OTP from email."}, status=406)
+                            else:
+                                return JsonResponse({"message": "Unexpected error while sending OTP"}, status=406)
+                        else:
+                            if verify_otp(otp, user):
+                                user.emailVerified = True
+                                user.save()
+                                Log.objects.create(user=user, action="OTP Verified, Account Activated")
+                                create_usual_login_location(user, ipInfo)
+                                Log.objects.create(user=user, action="OTP Verified, New Login Location Recorded", description=f"User IP Info: {ipInfo}")
+                                token = create_token(request, user)
+                                Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
+                                return JsonResponse({"token":token}, status=200)
+                            else:
+                                Log.objects.create(user=user, action="OTP Verification Failed, Failed to Activate Account", description=f"User IP Info: {ipInfo}")
+                                return JsonResponse({"message": "OTP Verification Failed, invalid OTP"}, status=406)
+
+                    #check for usual location
                     usual_login_locations = UsualLoginLocation.objects.filter(user=user)
-                    #check for login location
                     # if ipInfo.get("status") == "success" and ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #login from usual location
                     if ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #development environment purpose
                         token = create_token(request, user)
@@ -89,11 +112,10 @@ def login(request):
                             else:
                                 return JsonResponse({"message": "Unexpected error while sending OTP"}, status=406)
                         else:
-                            print("verify otp")
                             if verify_otp(otp, user):
                                 create_usual_login_location(user, ipInfo)
-                                token = create_token(request, user)
                                 Log.objects.create(user=user, action="OTP Verified, New Login Location Recorded", description=f"User IP Info: {ipInfo}")
+                                token = create_token(request, user)
                                 Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
                                 return JsonResponse({"token":token}, status=200)
                             else:
@@ -123,7 +145,7 @@ def login(request):
                 # Reject the image if more or fewer than one face is detected
                 Log.objects.create(user=user, action="Login Failed - Invalid number of faces detected.")
                 return JsonResponse(
-                    {"message": "Invalid number of faces detected. Please capture an image with exactly one face."},
+                    {"message": "Invalid number of faces detected. Please scan with exactly one face."},
                     status=408
                 )
     return JsonResponse({"message": "Invalid credentials"}, status=401)
@@ -186,30 +208,6 @@ def register(request):
 
         except Exception as e:
             error_message = str(e)  # Convert the exception to a string
-            print(error_message)
-            return JsonResponse({"message": "Unexpected error"}, status=500)
-
-    return HttpResponse(status=401)
-
-@csrf_exempt
-def register2(request):
-    if request.method == 'POST':
-        username = request.POST.get('username')
-        name = request.POST.get('name')
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-        try:
-            # Check if the username is already taken
-            User = get_user_model()
-            if User.objects.filter(username=username).exists():
-                response = {"message": "Username already exists"}
-                return JsonResponse({"message": "Username already exists"}, status=409)
-
-            # Create a new user
-            user = User.objects.create_user(username=username, name=name, email=email, password=password)
-
-            return JsonResponse({"message": "Registration successful"}, status=200)
-        except Exception as e:
             return JsonResponse({"message": "Unexpected error"}, status=500)
 
     return HttpResponse(status=401)
