@@ -8,7 +8,8 @@ from django.core.mail import EmailMessage
 from .models import Otp, UsualLoginLocation
 from datetime import datetime, timedelta
 from django.utils import timezone
-
+from PIL import Image, ImageDraw
+import face_recognition
 
 def detect_eyes(face_image):
     eye_cascade = cv2.CascadeClassifier('haarcascade_eye.xml')
@@ -131,3 +132,42 @@ def create_usual_login_location(user, ipInfo):
         details=ipInfo
     )
     return
+
+def get_main_face_encoding(image):
+    face_locations = face_recognition.face_locations(image)
+
+    # If no faces detected, return None
+    if not face_locations:
+        return None
+
+    # Find the largest face based on area
+    main_face = max(face_locations, key=lambda loc: (loc[2] - loc[0]) * (loc[3] - loc[1]))
+    if main_face:
+        # Extract face encoding for the main face
+        top, right, bottom, left = main_face
+        # Ensure the coordinates are integers
+        top, right, bottom, left = int(top), int(right), int(bottom), int(left)
+        # Extract main face image
+        main_face_image = image[top:bottom, left:right]
+        # Convert the image to RGB format
+        main_face_image = cv2.cvtColor(main_face_image, cv2.COLOR_BGR2RGB)
+
+        main_face_encoding = face_recognition.face_encodings(main_face_image)
+        if main_face_encoding:
+            return main_face_encoding
+        else:
+            return None
+    else:
+        return None
+
+def draw_faces(image_path, face_locations):
+    # Load the image
+    image = Image.open(image_path)
+    draw = ImageDraw.Draw(image)
+
+    # Draw a rectangle around each face
+    for (top, right, bottom, left) in face_locations:
+        draw.rectangle(((left, top), (right, bottom)), outline=(255, 0, 0), width=2)
+
+    # Show the image
+    image.show()

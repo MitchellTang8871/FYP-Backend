@@ -10,12 +10,16 @@ from . import serializers
 from django.contrib.auth import get_user_model
 import face_recognition
 import numpy as np
-from .utils import detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location
+from .utils import detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location, draw_faces, get_main_face_encoding
 from .models import Log, UsualLoginLocation, User
 from django.conf import settings
 import os
 from datetime import datetime
 from django.core.files.storage import FileSystemStorage
+import cv2
+from PIL import Image, ImageDraw
+import io
+import base64
 
 def getRequester(request):
     http_auth_token = request.META.get('HTTP_AUTHORIZATION')
@@ -60,7 +64,19 @@ def login(request):
     if user:
         if faceImage:
             image = face_recognition.load_image_file(faceImage)
-            face_encodings = face_recognition.face_encodings(image)
+
+            #development checking only ## face detected
+            # face_locations = face_recognition.face_locations(image)
+            # if len(face_locations) > 0:
+            #     draw_faces(faceImage, face_locations)
+
+            #get main face endcoding
+            main_face_encoding = get_main_face_encoding(image)
+            if main_face_encoding is None:
+                return JsonResponse({"message": "No face detected"}, status=408)
+            # face_encodings = face_recognition.face_encodings(image)
+            face_encodings = main_face_encoding
+            # print(face_encodings)
 
             # Ensure that only one face is detected
             if len(face_encodings) == 1:
@@ -181,7 +197,6 @@ def register(request):
             if faceImage:
                 image = face_recognition.load_image_file(faceImage)
                 face_encodings = face_recognition.face_encodings(image)
-
                 # Ensure that only one face is detected
                 if len(face_encodings) == 1:
                     if not detect_eyes(image):
@@ -199,10 +214,24 @@ def register(request):
                     return JsonResponse({"message": "Registration successful, Please login to activate your account"}, status=200)
                 else:
                     # Reject the image if more or fewer than one face is detected
-                    return JsonResponse(
-                        {"message": "Invalid number of faces detected. Please capture an image with exactly one face."},
-                        status=408
-                    )
+                    face_locations = face_recognition.face_locations(image)
+                    encodedImage = None
+                    if len(face_locations) > 0:
+                        #  Draw bounding box around the face
+                        image = Image.open(faceImage)
+                        draw = ImageDraw.Draw(image)
+                        for (top, right, bottom, left) in face_locations:
+                            draw.rectangle(((left, top), (right, bottom)), outline=(255, 0, 0), width=2)
+
+                        with io.BytesIO() as output:
+                            image.save(output, format='JPEG')
+                            encodedImage = base64.b64encode(output.getvalue()).decode()
+
+                    # Send the modified image and message as response
+                    return JsonResponse({
+                        "message": "Invalid number of faces detected. Please capture an image with exactly one face.",
+                        "encodedImage": encodedImage
+                    }, status=408)
             else:
                 return JsonResponse({"message": "No image provided"}, status=408)
 
