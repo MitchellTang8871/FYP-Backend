@@ -8,4 +8,5 @@ urlpatterns = [
     path("checkToken", views.checkToken),
     path("resendOtp", views.resendOtp),
     path("getactivitylogs", views.getActivityLogs),
+    path("getresults", views.getResults),
 ]

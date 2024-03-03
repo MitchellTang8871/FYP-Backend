@@ -20,6 +20,10 @@ import cv2
 from PIL import Image, ImageDraw
 import io
 import base64
+from io import BytesIO
+from django.template.loader import get_template
+from xhtml2pdf import pisa
+from django.http import FileResponse
 
 def getRequester(request):
     http_auth_token = request.META.get('HTTP_AUTHORIZATION')
@@ -31,7 +35,10 @@ def getRequester(request):
         except ObjectDoesNotExist:
             # invalid token
             return HttpResponse(status=460)
-    return user
+        return user
+    else:
+        return None
+
 # Create your views here.
 @csrf_exempt
 def logout(request):
@@ -246,8 +253,9 @@ def resendOtp(request):
     action = request.POST.get('action')
     if action is None:
         action = "Resend OTP"
-    if request.user.is_authenticated:
-        generate_and_send_otp(request.user, action)
+    theUser = getRequester(request)
+    if theUser is not None:
+        generate_and_send_otp(theUser, action)
     else:
         username = request.POST.get('username')
         password = request.POST.get('password')
@@ -264,3 +272,25 @@ def getActivityLogs(request):
     logs = Log.objects.filter(user=theUser).order_by('-timestamp')
     serialized_logs = serializers.ActivityLogsSerializer(logs, many=True).data
     return JsonResponse(serialized_logs, safe=False)
+
+@csrf_exempt
+def getResults(request):
+    otp = request.POST.get('otp')
+
+    #verify otp ##########################
+
+    theUser = getRequester(request)
+    data = {
+        'name': theUser.name,
+        'username': theUser.username
+    }
+    result = BytesIO()
+    template = get_template("result.html")
+    html = template.render(data)
+    pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), dest=result)
+    if not pdf.err:
+        return HttpResponse(result.getvalue(), content_type='application/pdf')
+    else:
+        return HttpResponse(status=500)
+
+
