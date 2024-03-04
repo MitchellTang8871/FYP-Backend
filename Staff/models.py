@@ -15,6 +15,7 @@ class User(AbstractUser):
     email = models.EmailField(default=None, max_length=100, null=True, blank=True)
     emailVerified = models.BooleanField(default=False)
     face_encodings = models.TextField(null=True, blank=True)
+    myr = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     def save(self, *args, **kwargs):
         if self.name is not None:
@@ -46,6 +47,13 @@ class Log(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.action} - {self.timestamp}"
+
+class Transactions(models.Model):
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="sender")
+    receiver = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="receiver")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    description = models.TextField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
 
 class UsualLoginLocation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

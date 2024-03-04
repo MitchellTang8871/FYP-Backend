@@ -11,6 +11,20 @@ from django.utils import timezone
 from PIL import Image, ImageDraw
 import face_recognition
 
+def getRequester(request):
+    http_auth_token = request.META.get('HTTP_AUTHORIZATION')
+    if http_auth_token != "undefined" and http_auth_token is not None:
+        theToken = http_auth_token.split(" ")[1]
+        try:
+            token = Token.objects.get(key=theToken)
+            user = token.user
+        except ObjectDoesNotExist:
+            # invalid token
+            return JsonResponse({"message": "Invaild Token"}, status=460)
+        return user
+    else:
+        return None
+
 def detect_eyes(face_image):
     eye_cascade = cv2.CascadeClassifier('haarcascade_eye.xml')
 

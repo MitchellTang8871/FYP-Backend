@@ -10,8 +10,8 @@ from . import serializers
 from django.contrib.auth import get_user_model
 import face_recognition
 import numpy as np
-from .utils import detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location, draw_faces, get_main_face_encoding
-from .models import Log, UsualLoginLocation, User
+from .utils import getRequester, detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location, draw_faces, get_main_face_encoding
+from .models import Log, UsualLoginLocation, User, Transactions
 from django.conf import settings
 import os
 from datetime import datetime
@@ -23,21 +23,10 @@ import base64
 from io import BytesIO
 from django.template.loader import get_template
 from xhtml2pdf import pisa
-from django.http import FileResponse
-
-def getRequester(request):
-    http_auth_token = request.META.get('HTTP_AUTHORIZATION')
-    if http_auth_token != "undefined" and http_auth_token is not None:
-        theToken = http_auth_token.split(" ")[1]
-        try:
-            token = Token.objects.get(key=theToken)
-            user = token.user
-        except ObjectDoesNotExist:
-            # invalid token
-            return HttpResponse(status=460)
-        return user
-    else:
-        return None
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+from django.db.models import Q
+from decimal import Decimal
 
 # Create your views here.
 @csrf_exempt
@@ -101,7 +90,7 @@ def login(request):
                     if not user.emailVerified:
                         if otp is None or len(str(otp).strip()) == 0:
                             if generate_and_send_otp(user, "Account Activation"):
-                                Log.objects.create(user=user, action="OTP Sent, Email validating", description=user.email)
+                                Log.objects.create(user=user, action="OTP Sent, Account Activation", description=user.email)
                                 return JsonResponse({"message": "Account Inactive, Please get OTP from email."}, status=406)
                             else:
                                 return JsonResponse({"message": "Unexpected error while sending OTP"}, status=406)
@@ -117,7 +106,7 @@ def login(request):
                                 return JsonResponse({"token":token}, status=200)
                             else:
                                 Log.objects.create(user=user, action="OTP Verification Failed, Failed to Activate Account", description=f"User IP Info: {ipInfo}")
-                                return JsonResponse({"message": "OTP Verification Failed, invalid OTP"}, status=406)
+                                return JsonResponse({"message": "OTP Verification Failed, Invalid OTP"}, status=406)
 
                     #check for usual location
                     usual_login_locations = UsualLoginLocation.objects.filter(user=user)
@@ -130,7 +119,7 @@ def login(request):
                     elif ipInfo.get("status") == "success" or ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1": #development environment purpose
                         if otp is None or len(str(otp).strip()) == 0:
                             if generate_and_send_otp(user, "Login"):
-                                Log.objects.create(user=user, action="OTP Sent, New Login Location Detected", description=f"User IP Info: {ipInfo}")
+                                Log.objects.create(user=user, action="OTP Sent, New Login Location Detected", description=f"User IP Info: {ipInfo}, {user.email}")
                                 return JsonResponse({"message": "New Login Location Detected, please get OTP from email"}, status=406)
                             else:
                                 return JsonResponse({"message": "Unexpected error while sending OTP"}, status=406)
@@ -143,12 +132,7 @@ def login(request):
                                 return JsonResponse({"token":token}, status=200)
                             else:
                                 Log.objects.create(user=user, action="OTP Verification Failed, New Login Location Detected", description=f"User IP Info: {ipInfo}")
-                                return JsonResponse({"message": "OTP Verification Failed, invalid OTP"}, status=406)
-                    # elif ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1": #development environment purpose for skipping otp
-                    #     print("localhost")
-                    #     token = create_token(request, user)
-                    #     Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
-                    #     return JsonResponse({"token":token}, status=200)
+                                return JsonResponse({"message": "OTP Verification Failed, Invalid OTP"}, status=406)
                     else:
                         return JsonResponse({"message": "Unexpected ip address detection error"}, status=500)
                 else:
@@ -179,8 +163,8 @@ def checkToken(request):
     try:
         token_obj = Token.objects.get(key=token)
         return HttpResponse(status=200)
-    except Exception as e:
-        return HttpResponse(status=460)
+    except ObjectDoesNotExist:
+        return JsonResponse({"message": "Invaild Token"}, status=460)
 
 @csrf_exempt
 def register(request):
@@ -195,6 +179,12 @@ def register(request):
             # Check for empty fields
             if not (username and name and email and password and faceImage):
                 return JsonResponse({"message": "All fields are required"}, status=400)
+
+            # Validate email format
+            try:
+                validate_email(email)
+            except ValidationError:
+                return JsonResponse({"message": "Invalid email format"}, status=400)
 
             # Check if the username is already taken
             User = get_user_model()
@@ -251,17 +241,20 @@ def register(request):
 @csrf_exempt
 def resendOtp(request):
     action = request.POST.get('action')
+    theUser = getRequester(request)
+
     if action is None:
         action = "Resend OTP"
-    theUser = getRequester(request)
     if theUser is not None:
         generate_and_send_otp(theUser, action)
+        Log.objects.create(user=theUser, action=f"OTP Sent, {action}", description=theUser.email)
     else:
         username = request.POST.get('username')
         password = request.POST.get('password')
         user = authenticate(username=username, password=password)
         if user:
             generate_and_send_otp(user, action)
+            Log.objects.create(user=user, action=f"OTP Sent, {action}", description=user.email)
         else:
             return HttpResponse(status=401)
     return HttpResponse(status=200)
@@ -277,20 +270,111 @@ def getActivityLogs(request):
 def getResults(request):
     otp = request.POST.get('otp')
 
-    #verify otp ##########################
-
     theUser = getRequester(request)
-    data = {
-        'name': theUser.name,
-        'username': theUser.username
-    }
-    result = BytesIO()
-    template = get_template("result.html")
-    html = template.render(data)
-    pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), dest=result)
-    if not pdf.err:
-        return HttpResponse(result.getvalue(), content_type='application/pdf')
+    if otp:
+        if verify_otp(otp, theUser):
+            data = {
+                'name': theUser.name,
+                'username': theUser.username
+            }
+            result = BytesIO()
+            template = get_template("result.html")
+            html = template.render(data)
+            pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), dest=result)
+            if not pdf.err:
+                return HttpResponse(result.getvalue(), content_type='application/pdf')
+            else:
+                return HttpResponse(status=500)
+        else:
+            Log.objects.create(user=theUser, action="OTP Verification Failed, Failed to Check Exam Result")
+            return JsonResponse({"message": "OTP Verification Failed, Invalid OTP"}, status=406)
     else:
-        return HttpResponse(status=500)
+        return JsonResponse({"message": "OTP Verification Failed, Invalid OTP"}, status=406)
+
+@csrf_exempt
+def getUserCredit(request):
+    theUser = getRequester(request)
+    if theUser:
+        return JsonResponse({"credit": theUser.myr})
+    else:
+        return JsonResponse({"message": "user not found"}, status=406)
+
+@csrf_exempt
+def searchUsers(request):
+    searchTerm = request.POST.get('searchTerm')
+    if searchTerm:
+        users = User.objects.filter(name__startswith=searchTerm).order_by('-date_joined')
+        serialized_users = serializers.SimpleUserSerializer(users, many=True).data
+        return JsonResponse(serialized_users, safe=False)
+    else:
+        return JsonResponse({"message": "Please Enter Search Term"}, status=406)
+
+import re
+
+@csrf_exempt
+def pay(request):
+    if request.method == 'POST':
+        receiver_username = request.POST.get('receiver')
+        amount = request.POST.get('amount')
+        description = request.POST.get('description')
+
+        if receiver_username and amount and description:
+            try:
+                theReceiver = User.objects.get(username=receiver_username)
+            except ObjectDoesNotExist:
+                return JsonResponse({"message": "Receiver not found"}, status=404)
+
+            amount_pattern = re.compile(r'^\d+(\.\d{1,2})?$')
+            if not amount_pattern.match(amount):
+                return JsonResponse({"message": "Invalid amount format"}, status=400)
+
+            amount = Decimal(amount)
+            if amount <= 0:
+                return JsonResponse({"message": "Amount must be greater than zero"}, status=400)
+
+            theUser = getRequester(request)
+            if theUser.myr < amount:
+                return JsonResponse({"message": "Insufficient funds"}, status=400)
+
+            theUser.myr -= amount
+            theReceiver.myr += amount
+
+            transaction = Transactions.objects.create(user=theUser, receiver=theReceiver, amount=amount, description=description)
+            transaction.save()
+            theUser.save()
+            theReceiver.save()
+
+            return JsonResponse({"message": "Payment Successful"}, status=200)
+        else:
+            return JsonResponse({"message": "Please provide receiver, amount, and description"}, status=400)
+    else:
+        return JsonResponse({"message": "Method not allowed"}, status=405)
+
+@csrf_exempt
+def getTransactions(request):
+    theUser = getRequester(request)
+    transactions = Transactions.objects.filter(Q(user=theUser) | Q(receiver=theUser)).order_by('-timestamp')
+
+    # Create a list to store modified transactions for front-end use
+    modified_transactions = []
+
+    for transaction in transactions:
+        data = serializers.TransactionsSerializer(transaction).data
+        if transaction.user == theUser:
+            # Convert amount to decimal and negate it
+            data['amount'] = -Decimal(data['amount'])
+        modified_transactions.append(data)
+
+    return JsonResponse(modified_transactions, safe=False)
+
+
+
+
+
+
+
+
+
+
 
 

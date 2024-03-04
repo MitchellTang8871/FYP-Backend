@@ -26,6 +26,11 @@ class LogAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'action')
     list_filter = ('timestamp',)
 
+class TransactionsAdmin(admin.ModelAdmin):
+    list_display = ('user', 'receiver', "amount", 'description', 'timestamp')
+    search_fields = ('user__username', 'receiver__username')
+    list_filter = ('timestamp',)
+
 class UsualLoginLocationAdmin(admin.ModelAdmin):
     list_display = ('user', 'userIp', 'city', 'country', 'details', 'timestamp')
     search_fields = ('user__username', 'city', 'country')
@@ -38,5 +43,6 @@ class OtpAdmin(admin.ModelAdmin):
 
 admin.site.register(User, UserAdmin)
 admin.site.register(Log, LogAdmin)
+admin.site.register(Transactions, TransactionsAdmin)
 admin.site.register(UsualLoginLocation, UsualLoginLocationAdmin)
 admin.site.register(Otp, OtpAdmin)

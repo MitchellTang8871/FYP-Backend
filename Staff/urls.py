@@ -9,4 +9,8 @@ urlpatterns = [
     path("resendOtp", views.resendOtp),
     path("getactivitylogs", views.getActivityLogs),
     path("getresults", views.getResults),
+    path("getusercredit", views.getUserCredit),
+    path("searchusers", views.searchUsers),
+    path("pay", views.pay),
+    path("gettransactions", views.getTransactions),
 ]
