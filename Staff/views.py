@@ -10,7 +10,7 @@ from . import serializers
 from django.contrib.auth import get_user_model
 import face_recognition
 import numpy as np
-from .utils import getRequester, detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location, draw_faces, get_main_face_encoding
+from .utils import getRequester, detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location, draw_faces, get_main_face_encoding, draw_main_face
 from .models import Log, UsualLoginLocation, User, Transactions
 from django.conf import settings
 import os
@@ -27,6 +27,8 @@ from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from decimal import Decimal
+import re
+from django.core.files.base import ContentFile
 
 # Create your views here.
 @csrf_exempt
@@ -111,12 +113,12 @@ def login(request):
                     #check for usual location
                     usual_login_locations = UsualLoginLocation.objects.filter(user=user)
                     # if ipInfo.get("status") == "success" and ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #login from usual location
-                    if ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #development environment purpose
+                    if ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #local development environment purpose
                         token = create_token(request, user)
                         Log.objects.create(user=user, action="Login Successful", description=f"User IP Info: {ipInfo}")
                         return JsonResponse({"token":token}, status=200)
                     # elif ipInfo.get("status") == "success":
-                    elif ipInfo.get("status") == "success" or ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1": #development environment purpose
+                    elif ipInfo.get("status") == "success" or ipInfo.get("status") == "fail" and ipInfo.get("query") == "127.0.0.1": #local development environment purpose
                         if otp is None or len(str(otp).strip()) == 0:
                             if generate_and_send_otp(user, "Login"):
                                 Log.objects.create(user=user, action="OTP Sent, New Login Location Detected", description=f"User IP Info: {ipInfo}, {user.email}")
@@ -136,18 +138,22 @@ def login(request):
                     else:
                         return JsonResponse({"message": "Unexpected ip address detection error"}, status=500)
                 else:
+                    #highlight main face
+                    image_with_highlighted_face = draw_main_face(faceImage)
                     # Generate a unique filename using username and current datetime
                     currentDatetime = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
                     filename = f"{username}-{currentDatetime}.jpg"
                     # Save the image
                     fs = FileSystemStorage()
-                    filename = fs.save(filename, faceImage)
+                    # Wrap the bytes data in a ContentFile
+                    file_to_save = ContentFile(image_with_highlighted_face)
+                    filename = fs.save(filename, file_to_save)
                     uploaded_file_path = fs.path(filename)
                     Log.objects.create(user=user, action="Login Failed - Face does not match.", description=uploaded_file_path)
                     return JsonResponse(
-                    {"message": "Face does not match."},
-                    status=409
-                )
+                        {"message": "Face does not match."},
+                        status=409
+                    )
             else:
                 # Reject the image if more or fewer than one face is detected
                 Log.objects.create(user=user, action="Login Failed - Invalid number of faces detected.")
@@ -155,6 +161,8 @@ def login(request):
                     {"message": "Invalid number of faces detected. Please scan with exactly one face."},
                     status=408
                 )
+        else:
+            return JsonResponse({"message": "No face detected"}, status=408)
     return JsonResponse({"message": "Invalid credentials"}, status=401)
 
 @csrf_exempt
@@ -302,14 +310,13 @@ def getUserCredit(request):
 @csrf_exempt
 def searchUsers(request):
     searchTerm = request.POST.get('searchTerm')
+    theUser = getRequester(request)
     if searchTerm:
-        users = User.objects.filter(name__startswith=searchTerm).order_by('-date_joined')
+        users = User.objects.filter(name__startswith=searchTerm).exclude(username=theUser.username).order_by('-date_joined')
         serialized_users = serializers.SimpleUserSerializer(users, many=True).data
         return JsonResponse(serialized_users, safe=False)
     else:
         return JsonResponse({"message": "Please Enter Search Term"}, status=406)
-
-import re
 
 @csrf_exempt
 def pay(request):
@@ -317,36 +324,74 @@ def pay(request):
         receiver_username = request.POST.get('receiver')
         amount = request.POST.get('amount')
         description = request.POST.get('description')
+        faceImage = request.FILES.get('image')
+        theUser = getRequester(request)
+        if faceImage:
+            image = face_recognition.load_image_file(faceImage)
 
-        if receiver_username and amount and description:
-            try:
-                theReceiver = User.objects.get(username=receiver_username)
-            except ObjectDoesNotExist:
-                return JsonResponse({"message": "Receiver not found"}, status=404)
+            #get main face endcoding
+            main_face_encoding = get_main_face_encoding(image)
+            if main_face_encoding is None:
+                return JsonResponse({"message": "No face detected"}, status=408)
+            face_encodings = main_face_encoding
 
-            amount_pattern = re.compile(r'^\d+(\.\d{1,2})?$')
-            if not amount_pattern.match(amount):
-                return JsonResponse({"message": "Invalid amount format"}, status=400)
+            # Ensure that only one face is detected
+            if len(face_encodings) == 1:
+                user_face_encodings = theUser.deserialize_face_encodings()
+                user_face_encodings = np.array(user_face_encodings)
+                if not detect_eyes(image):
+                    return JsonResponse({"message": "Eyes are not open, might be lighting issue"}, status=405)
+                #check if user face correctly matches
+                results = face_recognition.compare_faces([user_face_encodings],face_encodings[0],tolerance=0.6)
+                if results[0]: #if user face matches
+                    if receiver_username and amount and description:
+                        try:
+                            theReceiver = User.objects.get(username=receiver_username)
+                        except ObjectDoesNotExist:
+                            return JsonResponse({"message": "Receiver not found"}, status=404)
 
-            amount = Decimal(amount)
-            if amount <= 0:
-                return JsonResponse({"message": "Amount must be greater than zero"}, status=400)
+                        amount_pattern = re.compile(r'^\d+(\.\d{1,2})?$')
+                        if not amount_pattern.match(amount):
+                            return JsonResponse({"message": "Invalid amount format"}, status=400)
 
-            theUser = getRequester(request)
-            if theUser.myr < amount:
-                return JsonResponse({"message": "Insufficient funds"}, status=400)
+                        amount = Decimal(amount)
+                        if amount <= 0:
+                            return JsonResponse({"message": "Amount must be greater than zero"}, status=400)
 
-            theUser.myr -= amount
-            theReceiver.myr += amount
+                        theUser = getRequester(request)
+                        if theUser.myr < amount:
+                            return JsonResponse({"message": "Insufficient funds"}, status=400)
 
-            transaction = Transactions.objects.create(user=theUser, receiver=theReceiver, amount=amount, description=description)
-            transaction.save()
-            theUser.save()
-            theReceiver.save()
+                        theUser.myr -= amount
+                        theReceiver.myr += amount
 
-            return JsonResponse({"message": "Payment Successful"}, status=200)
+                        transaction = Transactions.objects.create(user=theUser, receiver=theReceiver, amount=amount, description=description)
+                        transaction.save()
+                        theUser.save()
+                        theReceiver.save()
+
+                        return JsonResponse({"message": "Payment Successful"}, status=200)
+                    else:
+                        return JsonResponse({"message": "Please provide receiver, amount, and description"}, status=400)
+                else:
+                    #highlight main face
+                    image_with_highlighted_face = draw_main_face(faceImage)
+                    # Generate a unique filename using username and current datetime
+                    currentDatetime = datetime.now().strftime("%d_%m_%Y_%H_%M_%S")
+                    filename = f"{theUser.username}-{currentDatetime}.jpg"
+                    # Save the image
+                    fs = FileSystemStorage()
+                    # Wrap the bytes data in a ContentFile
+                    file_to_save = ContentFile(image_with_highlighted_face)
+                    filename = fs.save(filename, file_to_save)
+                    uploaded_file_path = fs.path(filename)
+                    Log.objects.create(user=theUser, action="Transaction Failed - Face does not match.", description=uploaded_file_path)
+                    return JsonResponse(
+                        {"message": "Face does not match."},
+                        status=409
+                    )
         else:
-            return JsonResponse({"message": "Please provide receiver, amount, and description"}, status=400)
+            return JsonResponse({"message": "No face detected"}, status=408)
     else:
         return JsonResponse({"message": "Method not allowed"}, status=405)
 

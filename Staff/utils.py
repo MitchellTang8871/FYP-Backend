@@ -10,6 +10,9 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 from PIL import Image, ImageDraw
 import face_recognition
+from django.http import JsonResponse
+from django.core.exceptions import ObjectDoesNotExist
+import io
 
 def getRequester(request):
     http_auth_token = request.META.get('HTTP_AUTHORIZATION')
@@ -23,7 +26,7 @@ def getRequester(request):
             return JsonResponse({"message": "Invaild Token"}, status=460)
         return user
     else:
-        return None
+        return JsonResponse({"message": "No Token Provided"}, status=460)
 
 def detect_eyes(face_image):
     eye_cascade = cv2.CascadeClassifier('haarcascade_eye.xml')
@@ -185,3 +188,28 @@ def draw_faces(image_path, face_locations):
 
     # Show the image
     image.show()
+
+def draw_main_face(faceImage):
+    image = face_recognition.load_image_file(faceImage)
+    face_locations = face_recognition.face_locations(image)
+
+    # If no faces detected, return None
+    if not face_locations:
+        return None
+
+    # Find the largest face based on area
+    main_face = max(face_locations, key=lambda loc: (loc[2] - loc[0]) * (loc[3] - loc[1]))
+    if main_face:
+        image_with_highlighted_face = Image.open(faceImage)
+        draw = ImageDraw.Draw(image_with_highlighted_face)
+        # Extract face encoding for the main face
+        top, right, bottom, left = main_face
+        # Ensure the coordinates are integers
+        top, right, bottom, left = int(top), int(right), int(bottom), int(left)
+        draw.rectangle(((left, top), (right, bottom)), outline=(255, 0, 0), width=2)
+
+        byte_io = io.BytesIO()
+        image_with_highlighted_face.save(byte_io, format='JPEG')
+        return byte_io.getvalue()
+    else:
+        return faceImage
