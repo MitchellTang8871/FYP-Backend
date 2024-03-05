@@ -82,3 +82,6 @@ class Otp(models.Model):
     otp = models.CharField(max_length=6)
     timestamp = models.DateTimeField(auto_now_add=True)
     validUntil = models.DateTimeField(default=timezone.now() + timezone.timedelta(minutes=5))
+
+class allowTransactionIp(models.Model):
+    ip = models.CharField(max_length=255)
