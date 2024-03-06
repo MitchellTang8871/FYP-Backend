@@ -41,8 +41,13 @@ class OtpAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'otp')
     list_filter = ('timestamp',)
 
+class allowTransactionIpAdmin(admin.ModelAdmin):
+    list_display = ('ip',)
+    search_fields = ('ip',)
+
 admin.site.register(User, UserAdmin)
 admin.site.register(Log, LogAdmin)
 admin.site.register(Transactions, TransactionsAdmin)
 admin.site.register(UsualLoginLocation, UsualLoginLocationAdmin)
 admin.site.register(Otp, OtpAdmin)
+admin.site.register(allowTransactionIp, allowTransactionIpAdmin)

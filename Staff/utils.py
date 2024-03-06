@@ -208,6 +208,10 @@ def draw_main_face(faceImage):
         top, right, bottom, left = int(top), int(right), int(bottom), int(left)
         draw.rectangle(((left, top), (right, bottom)), outline=(255, 0, 0), width=2)
 
+        # Convert the image to RGB mode if it's not already
+        if image_with_highlighted_face.mode != 'RGB':
+            image_with_highlighted_face = image_with_highlighted_face.convert('RGB')
+
         byte_io = io.BytesIO()
         image_with_highlighted_face.save(byte_io, format='JPEG')
         return byte_io.getvalue()

@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model
 import face_recognition
 import numpy as np
 from .utils import getRequester, detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location, draw_faces, get_main_face_encoding, draw_main_face
-from .models import Log, UsualLoginLocation, User, Transactions
+from .models import Log, UsualLoginLocation, User, Transactions, allowTransactionIp
 from django.conf import settings
 import os
 from datetime import datetime
@@ -344,35 +344,43 @@ def pay(request):
                 #check if user face correctly matches
                 results = face_recognition.compare_faces([user_face_encodings],face_encodings[0],tolerance=0.6)
                 if results[0]: #if user face matches
-                    if receiver_username and amount and description:
-                        try:
-                            theReceiver = User.objects.get(username=receiver_username)
-                        except ObjectDoesNotExist:
-                            return JsonResponse({"message": "Receiver not found"}, status=404)
+                    #check is ip authenticated
+                    ipInfo = get_ip_location(request)
+                    allowedIps = allowTransactionIp.objects.all()
+                    # if ipInfo.get("status") == "success" and ipInfo.get("query") in usual_login_locations.values_list('userIp', flat=True): #login from usual location
+                    if ipInfo.get("query") in allowedIps.values_list('ip', flat=True): #local development environment purpose
+                        if receiver_username and amount and description:
+                            try:
+                                theReceiver = User.objects.get(username=receiver_username)
+                            except ObjectDoesNotExist:
+                                return JsonResponse({"message": "Receiver not found"}, status=404)
 
-                        amount_pattern = re.compile(r'^\d+(\.\d{1,2})?$')
-                        if not amount_pattern.match(amount):
-                            return JsonResponse({"message": "Invalid amount format"}, status=400)
+                            amount_pattern = re.compile(r'^\d+(\.\d{1,2})?$')
+                            if not amount_pattern.match(amount):
+                                return JsonResponse({"message": "Invalid amount format"}, status=400)
 
-                        amount = Decimal(amount)
-                        if amount <= 0:
-                            return JsonResponse({"message": "Amount must be greater than zero"}, status=400)
+                            amount = Decimal(amount)
+                            if amount <= 0:
+                                return JsonResponse({"message": "Amount must be greater than zero"}, status=400)
 
-                        theUser = getRequester(request)
-                        if theUser.myr < amount:
-                            return JsonResponse({"message": "Insufficient funds"}, status=400)
+                            theUser = getRequester(request)
+                            if theUser.myr < amount:
+                                return JsonResponse({"message": "Insufficient funds"}, status=400)
 
-                        theUser.myr -= amount
-                        theReceiver.myr += amount
+                            theUser.myr -= amount
+                            theReceiver.myr += amount
 
-                        transaction = Transactions.objects.create(user=theUser, receiver=theReceiver, amount=amount, description=description)
-                        transaction.save()
-                        theUser.save()
-                        theReceiver.save()
+                            transaction = Transactions.objects.create(user=theUser, receiver=theReceiver, amount=amount, description=description)
+                            transaction.save()
+                            theUser.save()
+                            theReceiver.save()
 
-                        return JsonResponse({"message": "Payment Successful"}, status=200)
+                            return JsonResponse({"message": "Payment Successful"}, status=200)
+                        else:
+                            return JsonResponse({"message": "Please provide receiver, amount, and description"}, status=400)
                     else:
-                        return JsonResponse({"message": "Please provide receiver, amount, and description"}, status=400)
+                        Log.objects.create(user=theUser, action="Transaction Failed - IP not allowed for transaction.", description=f"IP Info: {ipInfo}")
+                        return JsonResponse({"message": "Your current connection is not allowed to make transaction"}, status=409)
                 else:
                     #highlight main face
                     image_with_highlighted_face = draw_main_face(faceImage)

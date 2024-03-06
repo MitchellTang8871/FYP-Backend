@@ -25,8 +25,9 @@ class SimpleUserSerializer(serializers.ModelSerializer):
         fields = ['name', 'username']
 
 class TransactionsSerializer(serializers.ModelSerializer):
+    user = SimpleUserSerializer()
     receiver = SimpleUserSerializer()
 
     class Meta:
         model = models.Transactions
-        fields = ['receiver', 'amount', 'description', 'timestamp']
+        fields = ['user', 'receiver', 'amount', 'description', 'timestamp']
