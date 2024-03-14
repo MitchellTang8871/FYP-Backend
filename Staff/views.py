@@ -30,6 +30,9 @@ from decimal import Decimal
 import re
 from django.core.files.base import ContentFile
 
+#ASC
+from django.db import connection
+
 # Create your views here.
 @csrf_exempt
 def logout(request):
@@ -314,9 +317,31 @@ def searchUsers(request):
     if searchTerm:
         users = User.objects.filter(name__startswith=searchTerm).exclude(username=theUser.username).order_by('-date_joined')
         serialized_users = serializers.SimpleUserSerializer(users, many=True).data
+
+
         return JsonResponse(serialized_users, safe=False)
     else:
         return JsonResponse({"message": "Please Enter Search Term"}, status=406)
+
+#Advance Software Security
+@csrf_exempt
+def searchUsers2(request):
+    print("RUN")
+    searchTerm = request.POST.get('searchTerm')
+    theUser = getRequester(request)
+    if searchTerm:
+        # Crafted to be vulnerable to SQL injection
+        # '; DELETE FROM Staff_log
+        query = "SELECT * FROM Staff_user WHERE name LIKE '%s' ORDER BY date_joined DESC;" % searchTerm
+        with connection.cursor() as cursor:
+            cursor.executescript(f"SELECT * FROM Staff_user WHERE name LIKE '%{searchTerm}%' ORDER BY date_joined DESC;")
+            rows = cursor.fetchall()
+        serialized_users = [dict(zip([column[0] for column in cursor.description], row)) for row in rows]
+
+        return JsonResponse(serialized_users, safe=False)
+    else:
+        return JsonResponse({"message": "Please Enter Search Term"}, status=406)
+
 
 @csrf_exempt
 def pay(request):
