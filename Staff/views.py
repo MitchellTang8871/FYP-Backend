@@ -445,8 +445,15 @@ def getTransactions(request):
 
     return JsonResponse(modified_transactions, safe=False)
 
-
-
+#ASC
+@csrf_exempt
+def isAdmin(request):
+    theUser = getRequester(request)
+    isStaff = theUser.is_staff
+    if (isStaff):
+        return JsonResponse({"isAdmin": True}, status=200)
+    else:
+        return JsonResponse({"isAdmin": False}, status=200)
 
 
 
