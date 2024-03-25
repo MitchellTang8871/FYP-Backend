@@ -253,6 +253,8 @@ def register(request):
 def resendOtp(request):
     action = request.POST.get('action')
     theUser = getRequester(request)
+    if theUser is None:
+        return JsonResponse({"message": "Invalid Token"}, status=460)
 
     if action is None:
         action = "Resend OTP"
@@ -273,6 +275,8 @@ def resendOtp(request):
 @csrf_exempt
 def getActivityLogs(request):
     theUser = getRequester(request)
+    if theUser is None:
+        return JsonResponse({"message": "Invalid Token"}, status=460)
     logs = Log.objects.filter(user=theUser).order_by('-timestamp')
     serialized_logs = serializers.ActivityLogsSerializer(logs, many=True).data
     return JsonResponse(serialized_logs, safe=False)
@@ -305,6 +309,8 @@ def getResults(request):
 @csrf_exempt
 def getUserCredit(request):
     theUser = getRequester(request)
+    if theUser is None:
+        return JsonResponse({"message": "Invalid Token"}, status=460)
     if theUser:
         return JsonResponse({"credit": theUser.myr})
     else:
@@ -314,6 +320,8 @@ def getUserCredit(request):
 def searchUsers(request):
     searchTerm = request.POST.get('searchTerm')
     theUser = getRequester(request)
+    if theUser is None:
+        return JsonResponse({"message": "Invalid Token"}, status=460)
     if searchTerm:
         users = User.objects.filter(name__startswith=searchTerm).exclude(username=theUser.username).order_by('-date_joined')
         serialized_users = serializers.SimpleUserSerializer(users, many=True).data
@@ -329,6 +337,8 @@ def searchUsers2(request):
     print("RUN")
     searchTerm = request.POST.get('searchTerm')
     theUser = getRequester(request)
+    if theUser is None:
+        return JsonResponse({"message": "Invalid Token"}, status=460)
     if searchTerm:
         # Crafted to be vulnerable to SQL injection
         # '; DELETE FROM Staff_log
@@ -351,6 +361,8 @@ def pay(request):
         description = request.POST.get('description')
         faceImage = request.FILES.get('image')
         theUser = getRequester(request)
+        if theUser is None:
+            return JsonResponse({"message": "Invalid Token"}, status=460)
         if faceImage:
             image = face_recognition.load_image_file(faceImage)
 
@@ -389,6 +401,8 @@ def pay(request):
                                 return JsonResponse({"message": "Amount must be greater than zero"}, status=400)
 
                             theUser = getRequester(request)
+                            if theUser is None:
+                                return JsonResponse({"message": "Invalid Token"}, status=460)
                             if theUser.myr < amount:
                                 return JsonResponse({"message": "Insufficient funds"}, status=400)
 
@@ -431,6 +445,8 @@ def pay(request):
 @csrf_exempt
 def getTransactions(request):
     theUser = getRequester(request)
+    if theUser is None:
+        return JsonResponse({"message": "Invalid Token"}, status=460)
     transactions = Transactions.objects.filter(Q(user=theUser) | Q(receiver=theUser)).order_by('-timestamp')
 
     # Create a list to store modified transactions for front-end use
@@ -449,6 +465,8 @@ def getTransactions(request):
 @csrf_exempt
 def isAdmin(request):
     theUser = getRequester(request)
+    if theUser is None:
+        return JsonResponse({"message": "Invalid Token"}, status=460)
     isStaff = theUser.is_staff
     if (isStaff):
         return JsonResponse({"isAdmin": True}, status=200)

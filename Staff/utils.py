@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 from PIL import Image, ImageDraw
 import face_recognition
-from django.http import JsonResponse
+from django.http import HttpResponse
 from django.core.exceptions import ObjectDoesNotExist
 import io
 
@@ -23,11 +23,10 @@ def getRequester(request):
             user = token.user
         except ObjectDoesNotExist:
             # invalid token
-            return JsonResponse({"message": "Invaild Token"}, status=460)
+            return None
         return user
     else:
-        return JsonResponse({"message": "No Token Provided"}, status=460)
-
+        return None
 def detect_eyes(face_image):
     eye_cascade = cv2.CascadeClassifier('haarcascade_eye.xml')
 
