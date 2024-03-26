@@ -168,6 +168,21 @@ def login(request):
             return JsonResponse({"message": "No face detected"}, status=408)
     return JsonResponse({"message": "Invalid credentials"}, status=401)
 
+#ASC
+@csrf_exempt
+def login2(request): #ASC
+    #ASC
+    username = request.POST['username']
+    password = request.POST['password']
+    user = authenticate(username=username, password=password)
+    if user:
+        token = create_token(request, user)
+        return JsonResponse({"token":token}, status=200)
+    else:
+        return JsonResponse({"message": "Invalid credentials"}, status=401)
+
+
+
 @csrf_exempt
 def checkToken(request):
     token = request.POST['token']
@@ -333,8 +348,8 @@ def searchUsers(request):
 
 #Advance Software Security
 @csrf_exempt
-def searchUsers2(request):
-    print("RUN")
+def searchUsers2(request): #ASC
+    #ASC
     searchTerm = request.POST.get('searchTerm')
     theUser = getRequester(request)
     if theUser is None:
