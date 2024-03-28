@@ -488,6 +488,25 @@ def isAdmin(request):
     else:
         return JsonResponse({"isAdmin": False}, status=200)
 
+#ASC
+@csrf_exempt
+def delUser(request):
+    theUser = getRequester(request)
+    if theUser is None:
+        return JsonResponse({"message": "Invalid Token"}, status=460)
+    if theUser.is_staff:
+        username = request.POST.get('username')
+        if username:
+            try:
+                user = User.objects.get(username=username)
+            except ObjectDoesNotExist:
+                return JsonResponse({"message": "User not found"}, status=404)
+            user.delete()
+            return JsonResponse({"message": "User deleted"}, status=200)
+        else:
+            return JsonResponse({"message": "Please provide username"}, status=400)
+    else:
+        return JsonResponse({"message": "Unauthorized"}, status=401)
 
 
 

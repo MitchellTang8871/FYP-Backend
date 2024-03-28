@@ -15,4 +15,5 @@ urlpatterns = [
     path("searchusers", views.searchUsers),
     path("pay", views.pay),
     path("gettransactions", views.getTransactions),
+    path("deluser",views.delUser),
 ]
