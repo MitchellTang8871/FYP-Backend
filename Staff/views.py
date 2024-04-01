@@ -77,7 +77,6 @@ def login(request):
                 return JsonResponse({"message": "No face detected"}, status=408)
             # face_encodings = face_recognition.face_encodings(image)
             face_encodings = main_face_encoding
-            # print(face_encodings)
 
             # Ensure that only one face is detected
             if len(face_encodings) == 1:

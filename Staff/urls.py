@@ -5,7 +5,6 @@ urlpatterns = [
     path("isadmin", views.isAdmin),
     path("register", views.register),
     path("login", views.login),
-    path("login2", views.login2), # ASC
     path("logout", views.logout),
     path("checkToken", views.checkToken),
     path("resendOtp", views.resendOtp),
