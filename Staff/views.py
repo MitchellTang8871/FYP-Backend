@@ -356,6 +356,7 @@ def searchUsers2(request): #ASC
     if searchTerm:
         # Crafted to be vulnerable to SQL injection
         # '; DELETE FROM Staff_log
+        # '; DELETE FROM Staff_user WHERE username = 'del';--
         query = "SELECT * FROM Staff_user WHERE name LIKE '%s' ORDER BY date_joined DESC;" % searchTerm
         with connection.cursor() as cursor:
             cursor.executescript(f"SELECT * FROM Staff_user WHERE name LIKE '%{searchTerm}%' ORDER BY date_joined DESC;")
@@ -506,6 +507,20 @@ def delUser(request):
             return JsonResponse({"message": "Please provide username"}, status=400)
     else:
         return JsonResponse({"message": "Unauthorized"}, status=401)
+
+#ASC
+@csrf_exempt
+def delUser2(request):
+    username = request.POST.get('username')
+    if username:
+        try:
+            user = User.objects.get(username=username)
+        except ObjectDoesNotExist:
+            return JsonResponse({"message": "User not found"}, status=404)
+        user.delete()
+        return JsonResponse({"message": "User deleted"}, status=200)
+    else:
+        return JsonResponse({"message": "Please provide username"}, status=400)
 
 
 

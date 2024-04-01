@@ -15,4 +15,9 @@ urlpatterns = [
     path("pay", views.pay),
     path("gettransactions", views.getTransactions),
     path("deluser",views.delUser),
+
+    # ASC
+    # path("login2", views.login2),
+    # path("searchusers2", views.searchUsers2),
+    # path("deluser2",views.delUser2),
 ]
