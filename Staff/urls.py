@@ -18,6 +18,6 @@ urlpatterns = [
 
     # ASC
     # path("login2", views.login2),
-    # path("searchusers2", views.searchUsers2),
-    # path("deluser2",views.delUser2),
+    # path("searchusers", views.searchUsers2),
+    # path("deluser",views.delUser2),
 ]
