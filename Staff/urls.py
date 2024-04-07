@@ -11,13 +11,13 @@ urlpatterns = [
     path("getactivitylogs", views.getActivityLogs),
     path("getresults", views.getResults),
     path("getusercredit", views.getUserCredit),
-    path("searchusers", views.searchUsers),
     path("pay", views.pay),
     path("gettransactions", views.getTransactions),
     path("deluser",views.delUser),
+    path("searchusers", views.searchUsers),
 
     # ASC
     # path("login2", views.login2),
-    # path("searchusers", views.searchUsers2),
     # path("deluser",views.delUser2),
+    # path("searchusers", views.searchUsers2),
 ]
