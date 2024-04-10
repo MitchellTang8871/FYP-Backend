@@ -1,10 +1,7 @@
-from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
 from django.core.exceptions import ObjectDoesNotExist
 from . import serializers
 from django.contrib.auth import get_user_model
@@ -12,11 +9,8 @@ import face_recognition
 import numpy as np
 from .utils import getRequester, detect_eyes, get_ip_location, create_token, generate_and_send_otp, verify_otp, create_usual_login_location, draw_faces, get_main_face_encoding, draw_main_face
 from .models import Log, UsualLoginLocation, User, Transactions, allowTransactionIp
-from django.conf import settings
-import os
 from datetime import datetime
 from django.core.files.storage import FileSystemStorage
-import cv2
 from PIL import Image, ImageDraw
 import io
 import base64
@@ -29,9 +23,6 @@ from django.db.models import Q
 from decimal import Decimal
 import re
 from django.core.files.base import ContentFile
-
-#ASC
-from django.db import connection
 
 # Create your views here.
 @csrf_exempt
@@ -166,21 +157,6 @@ def login(request):
         else:
             return JsonResponse({"message": "No face detected"}, status=408)
     return JsonResponse({"message": "Invalid credentials"}, status=401)
-
-#ASC
-@csrf_exempt
-def login2(request): #ASC
-    #ASC
-    username = request.POST['username']
-    password = request.POST['password']
-    user = authenticate(username=username, password=password)
-    if user:
-        token = create_token(request, user)
-        return JsonResponse({"token":token}, status=200)
-    else:
-        return JsonResponse({"message": "Invalid credentials"}, status=401)
-
-
 
 @csrf_exempt
 def checkToken(request):
@@ -345,29 +321,6 @@ def searchUsers(request):
     else:
         return JsonResponse({"message": "Please Enter Search Term"}, status=406)
 
-#Advance Software Security
-@csrf_exempt
-def searchUsers2(request): #ASC
-    #ASC
-    searchTerm = request.POST.get('searchTerm')
-    theUser = getRequester(request)
-    if theUser is None:
-        return JsonResponse({"message": "Invalid Token"}, status=460)
-    if searchTerm:
-        # Crafted to be vulnerable to SQL injection
-        # '; DELETE FROM Staff_log
-        # '; DELETE FROM Staff_user WHERE username = 'del';--
-        query = "SELECT * FROM Staff_user WHERE name LIKE '%s' ORDER BY date_joined DESC;" % searchTerm
-        with connection.cursor() as cursor:
-            cursor.executescript(f"SELECT * FROM Staff_user WHERE name LIKE '%{searchTerm}%' ORDER BY date_joined DESC;")
-            rows = cursor.fetchall()
-        serialized_users = [dict(zip([column[0] for column in cursor.description], row)) for row in rows]
-
-        return JsonResponse(serialized_users, safe=False)
-    else:
-        return JsonResponse({"message": "Please Enter Search Term"}, status=406)
-
-
 @csrf_exempt
 def pay(request):
     if request.method == 'POST':
@@ -475,55 +428,6 @@ def getTransactions(request):
         modified_transactions.append(data)
 
     return JsonResponse(modified_transactions, safe=False)
-
-#ASC
-@csrf_exempt
-def isAdmin(request):
-    theUser = getRequester(request)
-    if theUser is None:
-        return JsonResponse({"message": "Invalid Token"}, status=460)
-    isStaff = theUser.is_staff
-    if (isStaff):
-        return JsonResponse({"isAdmin": True}, status=200)
-    else:
-        return JsonResponse({"isAdmin": False}, status=200)
-
-#ASC
-@csrf_exempt
-def delUser(request):
-    theUser = getRequester(request)
-    if theUser is None:
-        return JsonResponse({"message": "Invalid Token"}, status=460)
-    if theUser.is_staff:
-        username = request.POST.get('username')
-        if username:
-            try:
-                user = User.objects.get(username=username)
-            except ObjectDoesNotExist:
-                return JsonResponse({"message": "User not found"}, status=404)
-            user.delete()
-            return JsonResponse({"message": "User deleted"}, status=200)
-        else:
-            return JsonResponse({"message": "Please provide username"}, status=400)
-    else:
-        return JsonResponse({"message": "Unauthorized"}, status=401)
-
-#ASC
-@csrf_exempt
-def delUser2(request):
-    username = request.POST.get('username')
-    if username:
-        try:
-            user = User.objects.get(username=username)
-        except ObjectDoesNotExist:
-            return JsonResponse({"message": "User not found"}, status=404)
-        user.delete()
-        return JsonResponse({"message": "User deleted"}, status=200)
-    else:
-        return JsonResponse({"message": "Please provide username"}, status=400)
-
-
-
 
 
 
