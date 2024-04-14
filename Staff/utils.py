@@ -6,11 +6,9 @@ import random
 import string
 from django.core.mail import EmailMessage
 from .models import Otp, UsualLoginLocation
-from datetime import datetime, timedelta
 from django.utils import timezone
 from PIL import Image, ImageDraw
 import face_recognition
-from django.http import HttpResponse
 from django.core.exceptions import ObjectDoesNotExist
 import io
 
@@ -27,6 +25,7 @@ def getRequester(request):
         return user
     else:
         return None
+
 def detect_eyes(face_image):
     eye_cascade = cv2.CascadeClassifier('haarcascade_eye.xml')
 
