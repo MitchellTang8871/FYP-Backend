@@ -46,10 +46,12 @@ def is_eye_open(face_image, center, radius):
     r = radius
     eye_region = face_image[y-r:y+r, x-r:x+r]
     hsv = cv2.cvtColor(eye_region, cv2.COLOR_BGR2HSV)
-    lower_white = np.array([0, 0, 80])
-    upper_white = np.array([179, 30, 255])
+    # lower_white = np.array([0, 0, 80])
+    # upper_white = np.array([179, 30, 255])
     # lower_white = np.array([100, 0, 100])
     # upper_white = np.array([130, 30, 255])
+    lower_white = np.array([0, 0, 80])
+    upper_white = np.array([179, 50, 255])
     mask = cv2.inRange(hsv, lower_white, upper_white)
     # print("White pixels:", cv2.countNonZero(mask))
     # print("HSV Values:", hsv)
@@ -157,6 +159,7 @@ def get_main_face_encoding(image):
 
     # Find the largest face based on area
     main_face = max(face_locations, key=lambda loc: (loc[2] - loc[0]) * (loc[3] - loc[1]))
+
     if main_face:
         # Extract face encoding for the main face
         top, right, bottom, left = main_face
